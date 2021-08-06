@@ -9,6 +9,7 @@ import com.example.googlemlkitdemo.Model.UserRequest;
 import com.example.googlemlkitdemo.Model.UserResponse;
 import com.google.gson.Gson;
 
+import java.io.IOException;
 import java.util.List;
 
 import okhttp3.MediaType;
@@ -23,6 +24,7 @@ public class UserDAO {
     private UserApi mUser = RetrofitClient.getRetrofitClient().create(UserApi.class);;
     private final String TAG = "UserDAO";
     private UserResponse userResponse = null;
+    private boolean endedReq = false;
 
     private void getUsers() {
 
@@ -53,7 +55,8 @@ public class UserDAO {
 
     }
 
-    public UserResponse sendUser(UserRequest onRequest){
+    public void sendUser(UserRequest onRequest){
+        endedReq = false;
         //Gson gson = new Gson();
         String json = new Gson().toJson(onRequest);
         RequestBody body = RequestBody.create(MediaType.parse("application/json"), json);
@@ -62,21 +65,36 @@ public class UserDAO {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()){
-                    String responseMsg = response.body().toString();
-                    UserResponse res = new Gson().fromJson("responseMsg", UserResponse.class);
-                    Log.d(TAG, responseMsg);
+                    String responseMsg = null;
+                    try {
+                        responseMsg = response.body().string();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    Log.d(TAG, "body: " + responseMsg);
+                    UserResponse res = new Gson().fromJson(responseMsg, UserResponse.class);
                     userResponse = res;
-                } else Log.e(TAG, "Não foi possível estabelecer conexão com o servidor: " + response);
+                    endedReq = true;
+                } else {
+                    Log.e(TAG, "Não foi possível estabelecer conexão com o servidor: " + response);
+                    endedReq = true;
+                }
             }
 
             @Override
             public void onFailure(Call<ResponseBody> call, Throwable t) {
-
+                endedReq = true;
             }
         });
 
+    }
+
+    public UserResponse getUserResponse(){
         return userResponse;
     }
 
 
+    public boolean getStatus() {
+        return endedReq;
+    }
 }

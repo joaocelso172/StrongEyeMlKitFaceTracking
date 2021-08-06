@@ -8,40 +8,45 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
-import android.view.OrientationEventListener;
-import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraX;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
+import androidx.constraintlayout.widget.ConstraintLayout;
 
 import com.example.googlemlkitdemo.DAL.UserDAO;
 import com.example.googlemlkitdemo.Model.UserRequest;
 import com.example.googlemlkitdemo.Model.UserResponse;
 import com.example.googlemlkitdemo.Util.Base64Converter;
+import com.example.googlemlkitdemo.sdk.DoorControl;
+import com.example.googlemlkitdemo.sdk.ITempClient;
 import com.example.googlemlkitdemo.sdk.LightSensor;
+import com.example.googlemlkitdemo.sdk.TempClient;
 import com.google.firebase.ml.vision.FirebaseVision;
 import com.google.firebase.ml.vision.common.FirebaseVisionImage;
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
 import com.google.firebase.ml.vision.face.FirebaseVisionFace;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceDetector;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceDetectorOptions;
-
-import org.jetbrains.annotations.NotNull;
+import com.truesen.face.sdk.NativeVisionApi;
 
 import java.util.List;
 
 import static com.google.android.gms.vision.face.FaceDetector.ACCURATE_MODE;
 
-public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnalysis.Analyzer {
+public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnalysis.Analyzer, ITempClient {
     private static final String TAG = "MLKitFacesAnalyzer";
     private TextureView tv;
+    private TextView txtIdUser, txtTempUser;
     private ImageView iv;
     private Bitmap bitmap;
     private Canvas canvas;
@@ -58,12 +63,27 @@ public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnal
     private Runnable timerRunnable;
     private boolean countingTime = false;
     private boolean isLightOpen = false;
+    private Handler handler;
+    private TempClient tempClient;
+    private Context c;
+    private LinearLayout lUserInfo;
+    private LinearLayout loadingRecogLayout;
+    private ConstraintLayout cRecogInfo;
+    private ImageView imgUserInfo;
+    private FirebaseVisionImage foundedFaceImage;
+    private int reqs = 0, lastID = 9999999, contReq = 0;
 
-
-    FaceTrackingAnalyzer(TextureView tv, ImageView iv, CameraX.LensFacing lens) {
+    FaceTrackingAnalyzer(TextureView tv, ImageView iv, TextView txtIdUser, TextView txtTempUser, ImageView imgUserInfo, CameraX.LensFacing lens, Context c, ConstraintLayout cRecogInfo, LinearLayout lUserInfo, LinearLayout loadingRecogLayout) {
         this.tv = tv;
         this.iv = iv;
+        this.txtIdUser = txtIdUser;
+        this.txtTempUser = txtTempUser;
         this.lens = lens;
+        this.c = c;
+        this.lUserInfo = lUserInfo;
+        this.cRecogInfo = cRecogInfo;
+        this.loadingRecogLayout = loadingRecogLayout;
+        this.imgUserInfo = imgUserInfo;
     }
 
     @Override
@@ -88,6 +108,7 @@ public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnal
         FirebaseVisionFaceDetector faceDetector = FirebaseVision.getInstance().getVisionFaceDetector(detectorOptions);
         faceDetector.detectInImage(fbImage).addOnSuccessListener(firebaseVisionFaces -> {
             if (!firebaseVisionFaces.isEmpty()) {
+                foundedFaceImage = fbImage;
                 processFaces(firebaseVisionFaces);
                 timerForLight(5);
             } else {
@@ -115,9 +136,17 @@ public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnal
         super.onPause();
     }
 
-    private void processFaces(List<FirebaseVisionFace> faces) {
-        for (FirebaseVisionFace face : faces) {
+    private void openDoor() {
+        NativeVisionApi.setGpioDirection(124, 1);
+    }
 
+    private void closeDoor() {
+        NativeVisionApi.setGpioDirection(124, 0);
+    }
+
+    private void processFaces(List<FirebaseVisionFace> faces) {
+        contReq = 0;
+        for (FirebaseVisionFace face : faces) {
             Rect box = new Rect((int) translateX(face.getBoundingBox().left),
                     (int) translateY(face.getBoundingBox().top),
                     (int) translateX(face.getBoundingBox().right),
@@ -128,11 +157,22 @@ public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnal
                     linePaint);
 
             canvas.drawRect(box, linePaint);
+
+            if (face.getTrackingId() != lastID){
+                if (contReq < 1) {
+                    contReq++;
+                    //runTempClient();
+                    getUserAccess(36);
+                }
+            }
+
+            lastID = face.getTrackingId();
         }
 
         Log.i(TAG, "Foram detectados " + faces.size() + " rostos.");
 
-        getUserAccess();
+        //runTempClient();
+        //getUserAccess(36);
 
         iv.setImageBitmap(bitmap);
     }
@@ -203,40 +243,70 @@ public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnal
         }
     }
 
-
-    private UserResponse sendUsersFromApi() {
+    private UserResponse sendUsersFromApi(UserRequest user) {
         inProcess = true;
-        Bitmap bmFace = fbImage.getBitmap();
-        String base64Img = Base64Converter.bitmapToBase64(bmFace);
-
-        UserRequest user = new UserRequest(base64Img);
-
+        boolean successful;
         userDAO = new UserDAO();
 
-        UserResponse userResponse = userDAO.sendUser(user);
+        userDAO.sendUser(user);
 
-        if (userResponse != null) {
-            if (userResponse.getCanAccess()) {
+        do {
+            setLoadingInfo();
+            successful = userDAO.getStatus();
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        } else Log.e(TAG, "Não foram encontrados registros de usuários");
+        } while (successful != true);
 
         inProcess = false;
-        return userResponse;
+
+        return userDAO.getUserResponse();
     }
 
-    private void getUserAccess() {
+    private void setUserInfo(UserResponse userResponse, double temp){
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    loadingRecogLayout.setVisibility(View.GONE);
+                    cRecogInfo.setVisibility(View.GONE);
+                    lUserInfo.setVisibility(View.VISIBLE);
+                    imgUserInfo.setImageBitmap(foundedFaceImage.getBitmap());
+                    txtIdUser.setText("CPF do usuário: " + userResponse.getUserID());
+                    txtTempUser.setText("Temperatura corporal: " + temp);
+                }
+            });
+
+
+    }
+
+    private void getUserAccess(double temp) {
         if (!inProcess) {
             threadPostUser = (new Thread() {
                 @Override
                 public void run() {
-                    UserResponse user = sendUsersFromApi();
+                    Bitmap bmFace = fbImage.getBitmap();
+                    String base64Img = Base64Converter.bitmapToBase64(bmFace);
+
+                    UserRequest userRequest = new UserRequest(base64Img, temp);
+                    UserResponse user = sendUsersFromApi(userRequest);
+                    reqs++;
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (user == null) {
-                                Log.d(TAG, "Usuário nulo");
-                            } else Log.d(TAG, "Usuário encontrado");
+                            if (user != null && user.getUserID() != null) {
+                                setUserInfo(user, temp);
+                                //Toast.makeText(c, "Usuário encontrado! CPF: " + user.getUserID() + ".", Toast.LENGTH_SHORT).show();
+                                openDoor();
+                            } else if (user != null && user.getUserID() == null) {
+                                Toast.makeText(c, "O usuário não possui acesso a este local.", Toast.LENGTH_SHORT).show();
+                            }else {
+                                Toast.makeText(c, "Não foi identificado um rosto na imagem.", Toast.LENGTH_SHORT).show();
+                            }
 
+                            setStandardInfo();
                         }
                     });
                 }
@@ -244,5 +314,60 @@ public class FaceTrackingAnalyzer extends AppCompatActivity implements ImageAnal
 
             threadPostUser.start();
         }
+    }
+
+    @Override
+    public void runTempClient() {
+        if (handler == null) {
+            handler = new Handler() {
+                @Override
+                public void handleMessage(Message msg) {
+                    returnTemp(msg);
+                }
+            };
+        }
+
+        tempClient = new TempClient(handler);
+        tempClient.start();
+    }
+
+    @Override
+    public void returnTemp(Message msg) {
+        if (msg != null) {
+            if (msg.what == 0) {
+                Log.d(TAG, "Temp: " + msg.obj);
+                //Toast.makeText(c, "A temperatura do usuário é de " + msg.obj + "ºC.", Toast.LENGTH_SHORT).show();
+                double temp = (double) msg.obj;
+                if (temp > 0) getUserAccess(temp);
+            } else Log.e(TAG, "Something happened");
+        }else Log.e(TAG, "Message is null");
+    }
+
+    private void setLoadingInfo() {
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                loadingRecogLayout.setVisibility(View.VISIBLE);
+                cRecogInfo.setVisibility(View.VISIBLE);
+                lUserInfo.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private void setStandardInfo(){
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(c, "Requisições feitas até o momento: " + reqs, Toast.LENGTH_SHORT).show();
+                loadingRecogLayout.setVisibility(View.GONE);
+                lUserInfo.setVisibility(View.GONE);
+                cRecogInfo.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void timer(){
+
     }
 }

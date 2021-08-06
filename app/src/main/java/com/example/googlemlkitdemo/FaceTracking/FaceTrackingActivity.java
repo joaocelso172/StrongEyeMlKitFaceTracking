@@ -7,90 +7,101 @@ import androidx.camera.core.CameraInfoUnavailableException;
 import androidx.camera.core.CameraX;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageAnalysisConfig;
-import androidx.camera.core.ImageCapture;
 import androidx.camera.core.Preview;
 import androidx.camera.core.PreviewConfig;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Message;
 import android.util.Log;
 import android.util.Size;
 import android.view.OrientationEventListener;
-import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.googlemlkitdemo.Model.Company;
 import com.example.googlemlkitdemo.R;
-import com.example.googlemlkitdemo.sdk.ITempClient;
-import com.example.googlemlkitdemo.sdk.LightSensor;
-import com.example.googlemlkitdemo.sdk.TempClient;
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
-import com.google.firebase.ml.vision.face.FirebaseVisionFaceDetectorOptions;
-import com.truesen.face.sdk.NativeVisionApi;
-import com.urovo.sdklibs.OnTempListener;
-import com.urovo.sdklibs.SDKManager;
-import com.urovo.sdklibs.utils.ToastTool;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class FaceTrackingActivity extends AppCompatActivity implements ITempClient {
+import static com.example.googlemlkitdemo.Model.Company.COMPANY_NAME;
+
+public class FaceTrackingActivity extends AppCompatActivity {
     public static final int REQUEST_CODE_PERMISSION = 101;
     public static final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
     private TextureView tv;
     private ImageView iv, imgCompany;
-    private TextView txtCompanyName, txtClock;
+    private TextView txtCompanyName, txtClock, txtDate, txtUserID, txtUserTemp;
+    private LinearLayout linearRecogInfo;
+    private LinearLayout loadingRecogLayout;
+    private ConstraintLayout constraintsAppInfo;
+    private ImageView imgInfo;
     private static final String TAG = "FaceTrackingActivity";
 
     public static CameraX.LensFacing lens = CameraX.LensFacing.FRONT;
 
-    private Handler handler;
-    private TempClient tempClient;
     private int rotation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         setContentView(R.layout.activity_face_tracking);
         tv = findViewById(R.id.tracking_texture_view);
         iv = findViewById(R.id.tracking_image_view);
         txtCompanyName = findViewById(R.id.txt_company_name);
         txtClock = findViewById(R.id.txt_clock);
+        txtDate = findViewById(R.id.txt_date);
+        txtUserID = findViewById(R.id.txt_user_info);
+        txtUserTemp = findViewById(R.id.txt_user_temp);
         imgCompany = findViewById(R.id.img_company);
+        imgInfo = findViewById(R.id.img_user_cam);
+        linearRecogInfo = findViewById(R.id.linear_recog_info);
+        loadingRecogLayout = findViewById(R.id.linear_loading_recog);
+        constraintsAppInfo = findViewById(R.id.constraints_app_info);
+
         if (allPermissionsGranted()) {
             tv.post(this::startCamera);
         } else {
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSION);
         }
+
         setElementsText();
         enableOrientantionListener();
-        executeSignIn();
+
         System.out.println("Inicializing real time face detection activity");
     }
 
     private void setElementsText(){
-        txtCompanyName.setText(Company.companyName);
+        txtCompanyName.setText(COMPANY_NAME);
         txtCompanyName.setTextSize(25);
         txtClock.setTextSize(25);
         imgCompany.setImageResource(R.drawable.eye);
         enableTimerListener();
-
+        constraintsAppInfo.setVisibility(View.VISIBLE);
     }
 
     private void enableTimerListener(){
-
 
         Handler timerHandler = new Handler();
         Runnable timerRunnable = new Runnable() {
@@ -98,10 +109,15 @@ public class FaceTrackingActivity extends AppCompatActivity implements ITempClie
             @Override
             public void run() {
                 long currentTime = System.currentTimeMillis();
-                SimpleDateFormat simpleDateFormat = new SimpleDateFormat("hh:mm:ss");
+                SimpleDateFormat hourFormatDate = new SimpleDateFormat("HH:mm:ss");
+                SimpleDateFormat weeklyFormatDate = new SimpleDateFormat("EEEE");
+                SimpleDateFormat monthlyFormatDate = new SimpleDateFormat("dd/MM/yyyy");
                 Date date = new Date(currentTime);
-                String time = simpleDateFormat.format(date);
+                String time = hourFormatDate.format(date);
+                String weeklyDate = weeklyFormatDate.format(date);
+                String monthlyDate = monthlyFormatDate.format(date);
                 txtClock.setText(time);
+                txtDate.setText(weeklyDate + ", " + monthlyDate);
                 timerHandler.postDelayed(this, 1000);
             }
         };
@@ -132,19 +148,6 @@ public class FaceTrackingActivity extends AppCompatActivity implements ITempClie
         orientationEventListener.enable();
 
     }
-
-    private void openDoor() {
-        NativeVisionApi.setGpioDirection(124, 1);
-    }
-
-    private void closeDoor() {
-        NativeVisionApi.setGpioDirection(124, 0);
-    }
-
-    public void executeSignIn() {
-        runTempClient();
-    }
-
 
     @SuppressLint("RestrictedApi")
     private void startCamera() {
@@ -193,8 +196,9 @@ public class FaceTrackingActivity extends AppCompatActivity implements ITempClie
                 .build();
 
         ImageAnalysis imageAnalysis = new ImageAnalysis(iac);
+
         imageAnalysis.setAnalyzer(Runnable::run,
-                new FaceTrackingAnalyzer(tv, iv, lens));
+                new FaceTrackingAnalyzer(tv, iv, txtUserID, txtUserTemp, imgInfo, lens, this, constraintsAppInfo, linearRecogInfo, loadingRecogLayout));
         CameraX.bindToLifecycle(this, preview, imageAnalysis);
     }
 
@@ -222,30 +226,6 @@ public class FaceTrackingActivity extends AppCompatActivity implements ITempClie
         return true;
     }
 
-    @Override
-    public void runTempClient() {
-        if (handler == null) {
-            handler = new Handler() {
-                @Override
-                public void handleMessage(Message msg) {
-                    returnTemp(msg);
-                }
-            };
-        }
-
-        tempClient = new TempClient(handler);
-        tempClient.start();
-    }
-
-    @Override
-    public void returnTemp(Message msg) {
-        if (msg != null) {
-            if (msg.what == 0) {
-                Log.d(TAG, "Temp: " + msg.obj);
-                Toast.makeText(this, "A temperatura do usuário é de " + msg.obj + "ºC.", Toast.LENGTH_SHORT).show();
-            } else Log.e(TAG, "Something happened");
-        }else Log.e(TAG, "Message is null");
-    }
 
 
 

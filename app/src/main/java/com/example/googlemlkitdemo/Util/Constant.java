@@ -12,9 +12,10 @@ import static androidx.core.content.ContextCompat.getSystemService;
 
 public class Constant {
 
-    public static final String BASE_URL = "https://the-tokenizer-314814.rj.r.appspot.com/";  // url principal do app
+    public static final String BASE_URL = "http://18.230.70.36:3000";  // url principal do app
     public static final boolean DEBUG = Boolean.parseBoolean("false"); // TROCAR PARA false CASO FOR INSTALAR PRA ALGUM CLIENTE
-    public static final String ID_TERMINAL = "getDeviceIMEI()";
+    public static final String ID_TERMINAL = "/reconhecimento-facial";
+    public static final String SEARCH_ROUTE = BASE_URL + ID_TERMINAL + "/buscar";
 
 
     public static final String getDeviceIMEI(Context c) {

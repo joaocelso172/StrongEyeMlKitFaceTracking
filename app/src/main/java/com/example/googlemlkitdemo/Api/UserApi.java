@@ -18,13 +18,14 @@ public interface UserApi {
     String CACHE = "Cache-Control: max-age=0";
     String AGENT = "User-Agent: StrongEye";
     String SECURITY = "Security:" + "0xxx0";
+    String CONNECTION = "keep-alive";
 
-    @Headers({CACHE, AGENT, SECURITY})
+    @Headers({CACHE, AGENT, SECURITY, CONNECTION})
     @GET("compar-face")
     Call<List<User>> getUsers();
 
     @Headers({CACHE, AGENT, SECURITY})
-    @POST(Constant.ID_TERMINAL)
+    @POST(Constant.SEARCH_ROUTE)
     Call<ResponseBody> postUsers(@Body RequestBody requestBody);
 
 }
