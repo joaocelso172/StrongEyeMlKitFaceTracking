@@ -18,14 +18,6 @@ public class Constant {
     public static final String SEARCH_ROUTE = BASE_URL + ID_TERMINAL + "/buscar";
 
 
-    public static final String getDeviceIMEI(Context c) {
-        String imeinum;
-
-        TelephonyManager tm = (TelephonyManager) c.getSystemService(Context.TELEPHONY_SERVICE);
-        String device_id = tm.getDeviceId();
-
-        return null;
-    }
 }
 
 

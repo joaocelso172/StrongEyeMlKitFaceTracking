@@ -1,6 +1,9 @@
 package com.example.googlemlkitdemo.Model;
 
+import android.content.Context;
+
 import com.example.googlemlkitdemo.Util.SimpleDateFormatUtil;
+import com.example.googlemlkitdemo.Util.TerminalInfo;
 import com.google.gson.annotations.SerializedName;
 
 import java.text.SimpleDateFormat;
@@ -12,7 +15,8 @@ public class UserRequest {
 
     @SerializedName("photo")
     private String base64Image;
-    private final String idTerminal = ID_TERMINAL;
+    @SerializedName("terminal_id")
+    private String idTerminal;
     private double temp;
 
     public double getTemp() {
@@ -23,9 +27,10 @@ public class UserRequest {
         this.temp = temp;
     }
 
-    public UserRequest(String base64Image, double temp){
+    public UserRequest(String base64Image, double temp, Context c){
         this.base64Image = base64Image;
         this.temp = temp;
+        this.idTerminal = TerminalInfo.getDeviceIMEI(c);
     }
 
     public UserRequest(String base64Image){

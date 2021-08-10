@@ -9,7 +9,7 @@ public class UserResponse {
     @SerializedName("FaceId")
     private String faceID;
     @SerializedName("ExternalImageId")
-    private String userID; //CPF
+    private String nationalInsuranceNumber; //CPF
     private boolean wasFound;
 
     public UserResponse(Boolean canAccess, String name) {
@@ -17,11 +17,11 @@ public class UserResponse {
         this.name = name;
     }
 
-    public UserResponse (Boolean wasFound, String userID, String faceID){
+    public UserResponse (Boolean wasFound, String nationalInsuranceNumber, String faceID){
         if (wasFound != null) {
             this.wasFound = wasFound;
         } else wasFound = true;
-        this.userID = userID;
+        this.nationalInsuranceNumber = nationalInsuranceNumber;
         this.faceID = faceID;
     }
 
@@ -38,12 +38,12 @@ public class UserResponse {
         this.faceID = faceID;
     }
 
-    public String getUserID() {
-        return userID;
+    public String getNationalInsuranceNumber() {
+        return nationalInsuranceNumber;
     }
 
-    public void setUserID(String userID) {
-        this.userID = userID;
+    public void setNationalInsuranceNumber(String nationalInsuranceNumber) {
+        this.nationalInsuranceNumber = nationalInsuranceNumber;
     }
 
     public boolean isWasFound() {

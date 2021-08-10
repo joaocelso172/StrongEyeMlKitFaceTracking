@@ -33,6 +33,7 @@ import android.widget.Toast;
 
 import com.example.googlemlkitdemo.Model.Company;
 import com.example.googlemlkitdemo.R;
+import com.example.googlemlkitdemo.Util.TerminalInfo;
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
 
 import java.text.SimpleDateFormat;
@@ -55,6 +56,8 @@ public class FaceTrackingActivity extends AppCompatActivity {
     public static CameraX.LensFacing lens = CameraX.LensFacing.FRONT;
 
     private int rotation;
+
+    private TerminalInfo terminalInfo;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,6 +93,11 @@ public class FaceTrackingActivity extends AppCompatActivity {
         enableOrientantionListener();
 
         System.out.println("Inicializing real time face detection activity");
+
+        //terminalInfo = new TerminalInfo(this);
+        String imei = TerminalInfo.getDeviceIMEI(this);
+
+        Log.d(TAG, "Imei: " + imei);
     }
 
     private void setElementsText(){
